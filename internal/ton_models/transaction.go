@@ -1,6 +1,6 @@
 package entity
 
-type Transaction struct {
+type TransactionTon struct {
 	Hash        string
 	Account     string
 	Success     bool

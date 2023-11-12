@@ -69,3 +69,11 @@ func (p *P) RunInTx(ctx context.Context, opts *sql.TxOptions, fn func(context.Co
 	done = true
 	return tx.Commit()
 }
+
+func (p *P) InsertTxsAndShard(txs, shard []interface{}) error {
+	// begin tx....
+
+	// insert
+
+	// commit
+}

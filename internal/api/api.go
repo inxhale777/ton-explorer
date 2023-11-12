@@ -10,7 +10,10 @@ import (
 )
 
 type API struct {
-	shardsRepo      *shards.R
+	repo      Sharder
+	repoUser
+	repoMetrics
+
 	transactionRepo *transactions.R
 }
 
@@ -44,5 +47,32 @@ func (a *API) transactions(c echo.Context) error {
 }
 
 func (a *API) transactionByID(c echo.Context) error {
+	// return 1 tx by id
+
+	// get eintity from DB
+	/*
+	type transaction struct {
+	bun.BaseModel `bun:"table:transactions"`
+
+	Hash        string
+	Account     string
+	Success     bool
+	LogicalTime uint64
+	TotalFee    string
+	Comment     sql.NullString
+}
+
+	*/
+	// THEN do remap to DTO
+	e, err := a.repo.GetTxByID(id)
+
+
+	dto := TransactionDTO{
+		Hash: e.Hash,
+
+		//.. do remaping 
+	}
+
 	return c.JSON(http.StatusOK, "TransactionByID")
 }
+

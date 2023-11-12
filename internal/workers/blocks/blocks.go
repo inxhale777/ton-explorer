@@ -16,18 +16,18 @@ import (
 	"tonexplorer/pkg/wrapper"
 )
 
-type W struct {
+type Worker struct {
 	cfg        *config.C
 	fetcher    *fetcher.F
-	shardsRepo *shards.R
+	shardsRepo TonSharer
 	db         postgres.DB
 }
 
-func New(cfg *config.C, fetcher *fetcher.F, shardsRepo *shards.R, db postgres.DB) *W {
-	return &W{cfg, fetcher, shardsRepo, db}
+func NewWorker(cfg *config.C, fetcher *fetcher.F, shardsRepo TonSharer) *W {
+	return &Worker{cfg, fetcher, shardsRepo}
 }
 
-func (worker *W) Run(ctx context.Context) error {
+func (w *Worker) Run(ctx context.Context) error {
 	l := zlog.Ctx(ctx).With().
 		Str("scope", "blocks worker").
 		Logger()
@@ -35,7 +35,7 @@ func (worker *W) Run(ctx context.Context) error {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
-	master, err := worker.startBlock(ctx, worker.cfg)
+	master, err := w.startBlock(ctx, w.cfg)
 	if err != nil {
 		l.Error().Err(err).Msg("startBlock")
 		return wrapper.Wrap(err)
@@ -47,7 +47,7 @@ func (worker *W) Run(ctx context.Context) error {
 			l.Info().Msg("context done")
 			return nil
 		case <-ticker.C:
-			err = worker.db.RunInTx(ctx, nil, func(ctx context.Context, tx postgres.Tx) error {
+			err = w.db.RunInTx(ctx, nil, func(ctx context.Context, tx postgres.Tx) error {
 				l = l.With().Uint32("master", master).Logger()
 				l.Info().Msg("start loop")
 
@@ -97,7 +97,7 @@ func (worker *W) Run(ctx context.Context) error {
 	}
 }
 
-func (worker *W) startBlock(ctx context.Context, cfg *config.C) (uint32, error) {
+func (worker *Worker) startBlock(ctx context.Context, cfg *config.C) (uint32, error) {
 	l := zlog.Ctx(ctx).With().
 		Str("scope", "blocks worker").
 		Logger()
@@ -114,3 +114,4 @@ func (worker *W) startBlock(ctx context.Context, cfg *config.C) (uint32, error) 
 
 	return lastVisitedMasterShard.SeqNo + 1, nil
 }
+

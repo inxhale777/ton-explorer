@@ -15,13 +15,7 @@ type R struct {
 	tx postgres.IDB
 }
 
-type shard struct {
-	bun.BaseModel `bun:"table:shards"`
 
-	Workchain int32
-	Shard     int64
-	SeqNo     uint32
-}
 
 func New(db postgres.IDB) *R {
 	return &R{db}

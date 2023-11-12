@@ -11,22 +11,22 @@ import (
 	zlog "github.com/rs/zerolog/log"
 )
 
-type S struct {
+type Scanner struct {
 	fetcher *fetcher.F
 	shards  *shards.R
 }
 
 func NewScanner(fetcher *fetcher.F, shards *shards.R) *S {
-	return &S{fetcher, shards}
+	return &Scanner{fetcher, shards}
 }
 
 // Shards find and return all unvisited shards from master block
-func (scanner *S) Shards(ctx context.Context, masterSeqNo uint32) ([]entity.Shard, error) {
+func (s *Scanner) Shards(ctx context.Context, masterSeqNo uint32) ([]entity.Shard, error) {
 	l := zlog.Ctx(ctx).With().
 		Str("scope", "scanner.Shards").
 		Uint32("master_seq_no", masterSeqNo).Logger()
 
-	allShardFromMasterBlk, err := scanner.fetcher.Shards(ctx, masterSeqNo)
+	allShardFromMasterBlk, err := s.fetcher.Shards(ctx, masterSeqNo)
 	if err != nil {
 		l.Error().Err(err).Msg("fetcher.Shards")
 		return nil, wrapper.Wrap(err)
@@ -35,7 +35,7 @@ func (scanner *S) Shards(ctx context.Context, masterSeqNo uint32) ([]entity.Shar
 	var result []entity.Shard
 	for _, shard := range allShardFromMasterBlk {
 		// find number of last visited shard on that chain
-		lastProcessedShard, err := scanner.shards.Last(ctx, shard.Workchain, shard.Shard)
+		lastProcessedShard, err := s.shards.Last(ctx, shard.Workchain, shard.Shard)
 		if err != nil {
 			l.Error().Err(err).Msg("shards.Last")
 			return nil, wrapper.Wrap(err)
