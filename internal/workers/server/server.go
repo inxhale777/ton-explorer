@@ -14,9 +14,9 @@ func New() *W {
 	return &W{}
 }
 
-func (worker *W) Run(ctx context.Context, shardsRepo *shards.R, transactionsRepo *transactions.R) error {
+func (worker *W) Run(ctx context.Context, shardsRepo *shards.R, transactionsRepo *transactions.R, endpoint string) error {
 	a := api.New(shardsRepo, transactionsRepo)
 	router := a.Init()
 
-	return router.Start(":8083")
+	return router.Start(endpoint)
 }
