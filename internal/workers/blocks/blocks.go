@@ -2,8 +2,9 @@ package blocks
 
 import (
 	"context"
-	"log"
 	"time"
+
+	zlog "github.com/rs/zerolog/log"
 
 	"tonexplorer/config"
 	"tonexplorer/internal/entity"
@@ -12,6 +13,7 @@ import (
 	"tonexplorer/internal/repo/shards"
 	"tonexplorer/internal/repo/transactions"
 	"tonexplorer/internal/scanner"
+	"tonexplorer/pkg/wrapper"
 )
 
 type W struct {
@@ -26,69 +28,84 @@ func New(cfg *config.C, fetcher *fetcher.F, shardsRepo *shards.R, db postgres.DB
 }
 
 func (worker *W) Run(ctx context.Context) error {
-	const trace = "blocks worker"
+	l := zlog.Ctx(ctx).With().
+		Str("scope", "blocks worker").
+		Logger()
 
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	master, err := worker.startBlock(ctx, worker.cfg)
 	if err != nil {
-		return err
+		l.Error().Err(err).Msg("startBlock")
+		return wrapper.Wrap(err)
 	}
 
 	for {
 		select {
 		case <-ctx.Done():
+			l.Info().Msg("context done")
 			return nil
 		case <-ticker.C:
 			err = worker.db.RunInTx(ctx, nil, func(ctx context.Context, tx postgres.Tx) error {
-				log.Printf("%s: is about to scan %d master block", trace, master)
+				l = l.With().Uint32("master", master).Logger()
+				l.Info().Msg("start loop")
 
 				shardsRepo := shards.New(tx)
 				txsRepo := transactions.New(tx)
-				sc := scanner.New(worker.fetcher, shardsRepo)
+				sc := scanner.NewScanner(worker.fetcher, shardsRepo)
 
 				ss, err := sc.Shards(ctx, master)
 				if err != nil {
-					return err
+					l.Error().Err(err).Msg("sc.Shards")
+					return wrapper.Wrap(err)
 				}
 
-				log.Printf("%s: proccesed %d shard from master block %d", trace, len(ss), master)
+				l.Info().Int("shards", len(ss)).Msg("proccesed shard")
 
 				txs, err := sc.Transactions(ctx, ss)
 				if err != nil {
-					return err
+					l.Error().Err(err).Msg("sc.Transactions")
+					return wrapper.Wrap(err)
 				}
 
-				log.Printf("%s: proccesed %d txs from master block %d", trace, len(txs), master)
+				l.Info().Int("txs", len(txs)).Msg("proccesed txs")
 
 				err = shardsRepo.Store(ctx, ss)
 				if err != nil {
-					return err
+					l.Error().Err(err).Msg("shardsRepo.Store")
+					return wrapper.Wrap(err)
 				}
 
 				err = txsRepo.Store(ctx, txs)
 				if err != nil {
-					return err
+					l.Error().Err(err).Msg("txsRepo.Store")
+					return wrapper.Wrap(err)
 				}
 
 				return nil
 			})
 			if err != nil {
-				log.Printf("%s: loop failed: %s", trace, err)
+				l.Error().Err(err).Msg("db.RunInTx")
 				time.Sleep(5 * time.Second)
 				continue
 			}
 
 			master++
+			l.Info().Msgf("end loop, next master: %d", master)
 		}
 	}
 }
 
 func (worker *W) startBlock(ctx context.Context, cfg *config.C) (uint32, error) {
+	l := zlog.Ctx(ctx).With().
+		Str("scope", "blocks worker").
+		Logger()
+
 	lastVisitedMasterShard, err := worker.shardsRepo.Last(ctx, entity.MasterChain, entity.FirstShard)
 	if err != nil {
-		return 0, err
+		l.Error().Err(err).Msg("shardsRepo.Last")
+		return 0, wrapper.Wrap(err)
 	}
 
 	if lastVisitedMasterShard.SeqNo == 0 {
